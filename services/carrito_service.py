@@ -1,22 +1,34 @@
 from repositories.carrito_repo import CarritoRepository
+from repositories.producto_repo import ProductoRepository
+from repositories.usuario_repo import UsuarioRepository
+from config import db
 
-repo = CarritoRepository()
+carrito_repo = CarritoRepository(db)
+producto_repo = ProductoRepository()
 
-async def agregar(idUsuario: str, idProducto: str, cantidad: int):
-    carrito = await repo.obtener(idUsuario)
+async def obtener(user_id: str):
+    carrito = await carrito_repo.find_by_user(user_id)
+    return {"items": carrito.get("items", [])}
 
-    # verificar si el producto ya estaba en el carrito
-    for item in carrito["items"]:
-        if item["idProducto"] == idProducto:
-            item["cantidad"] += cantidad
-            await repo.actualizar(idUsuario, carrito)
-            return carrito
+async def agregar(user_id: str, id_producto: str, cantidad: int):
+    # ⚠️ usar get_by_id en lugar de find_by_id
+    prod = await producto_repo.get_by_id(id_producto)
+    if not prod:
+        return {"error": "PRODUCTO_NO_ENCONTRADO"}
 
-    carrito["items"].append({"idProducto": idProducto, "cantidad": cantidad})
-    await repo.actualizar(idUsuario, carrito)
-    return carrito
+    # Enriquecer el carrito con los campos del modelo Producto
+    producto = {
+        "idProducto": str(prod["_id"]),
+        "nombre": prod["nombre"],
+        "precio": prod["precio"],
+        "imagen": prod.get("imagen"),
+        "cantidad": cantidad
+    }
 
-async def eliminar(idUsuario: str, idProducto: str):
-    carrito = await repo.obtener(idUsuario)
-    carrito["items"] = [i for i in carrito["items"] if i["idProducto"] != idProducto]
-    return await repo.actualizar(idUsuario, carrito)
+    await carrito_repo.add_item(user_id, id_producto, cantidad, producto)
+    return await obtener(user_id)
+
+async def eliminar(user_id: str, id_producto: str):
+    await carrito_repo.remove_item(user_id, id_producto)
+    return await obtener(user_id)
+

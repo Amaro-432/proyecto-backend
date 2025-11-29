@@ -1,19 +1,56 @@
+import jwt
+from datetime import datetime, timedelta
 from passlib.context import CryptContext
 from repositories.usuario_repo import UsuarioRepository
-from auth.jwt_handler import crear_token
+
+SECRET_KEY = "clave-super-secreta"
+ALGORITHM = "HS256"
 
 repo = UsuarioRepository()
-pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+pwd = CryptContext(
+    schemes=["argon2"],
+    deprecated="auto"
+)
 
 async def registrar(usuario):
-    usuario.password = pwd.hash(usuario.password)
-    return await repo.create(usuario.dict())
+    if not usuario.nombre or usuario.nombre.strip() == "":
+        return {"error": "NOMBRE_VACIO"}
 
-async def login(email: str, password: str):
-    user = await repo.findByEmail(email)
+    existente = await repo.find_by_email(usuario.email)
+    if existente:
+        return {"error": "EMAIL_EXISTE"}
 
-    if not user or not pwd.verify(password, user["password"]):
-        return {"error": "Credenciales inválidas"}
+    data = usuario.dict()
+    if "rol" not in data or not data["rol"]:
+        data["rol"] = "cliente"
 
-    token = crear_token({"id": str(user["_id"]), "rol": user["rol"]})
-    return {"token": token, "rol": user["rol"]}
+    data["password"] = pwd.hash(data["password"])
+    return {"ok": True, "usuario": await repo.create(data)}
+
+async def login(email, password):
+    usuario = await repo.find_by_email(email)
+    if not usuario:
+        return None
+
+    if not pwd.verify(password, usuario["password"]):
+        return None
+
+    # Crear token JWT con exp como timestamp
+    payload = {
+        "sub": str(usuario["_id"]),
+        "email": usuario["email"],
+        "rol": usuario["rol"],
+        "exp": int((datetime.utcnow() + timedelta(hours=12)).timestamp())
+    }
+    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+    return {
+        "usuario": {
+            "id": str(usuario["_id"]),
+            "nombre": usuario["nombre"],
+            "email": usuario["email"],
+            "rol": usuario["rol"]
+        },
+        "token": token
+    }

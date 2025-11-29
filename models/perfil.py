@@ -3,4 +3,8 @@ from pydantic import BaseModel
 class Perfil(BaseModel):
     id: str | None = None
     nombre: str
-    descripcion: str | None = None
+    telefono: str | None = None
+    direccion: str | None = None
+    comuna: str | None = None
+    
+    

@@ -23,3 +23,7 @@ class PedidoRepository(ICRUD):
     async def delete(self, id):
         await self.collection.delete_one({"_id": ObjectId(id)})
         return True
+
+
+pedido_repo = PedidoRepository()
+
